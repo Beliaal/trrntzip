@@ -938,7 +938,7 @@ int RecursiveMigrateTop(const char *pszRelPath, WORKSPACE *ws) {
 
 int main(int argc, char **argv) {
   WORKSPACE *ws;
-  const char *logdir = NULL, *errlog = NULL;
+  const char *errlog = NULL;
   int iCount = 0;
   int iOptionsFound = 0;
   int rc = 0;
@@ -946,6 +946,21 @@ int main(int argc, char **argv) {
   for (iCount = 1; iCount < argc; iCount++) {
     if (argv[iCount][0] == '-') {
       iOptionsFound++;
+	  
+      if (strcmp(argv[iCount], "-log") == 0) {
+        errlog = "_error.log";
+        continue;
+      }
+
+      if (strncmp(argv[iCount], "-log=", 5) == 0) {
+        if (argv[iCount][5] == '\0') {
+          fprintf(stderr, "Missing filename for -log\n");
+          return EXIT_FAILURE;
+        }
+
+        errlog = &argv[iCount][5];
+        continue;
+      }
 
       switch (tolower((unsigned char)argv[iCount][1])) {
       case '?':
@@ -957,28 +972,23 @@ int main(int argc, char **argv) {
             "\tStatMat, shindakun, Ultrasubmarine, r3nh03k, goosecreature, "
             "gordonj,\n\t0-wiz-0, A.Miller\n"
             "Homepage: https://github.com/0-wiz-0/trrntzip\n\n"
-            "Usage: trrntzip [-dfghqsv] [-e[FILE]] [-l[DIR]] [ZIPFILE|DIRECTORY]\n\n"
+            "Usage: trrntzip [-dfghqsv] [-log[=FILE]] [ZIPFILE|DIRECTORY]\n\n"
             "Convert a zip archive (or each zip archive in a directory) to torrentzip format.\n\n"
             "Options:\n"
-            "\t-h\t: show this help\n"
-            "\t-d\t: strip sub-directories from zips\n"
-            "\t-eFILE\t: write error log to FILE (empty to disable)\n"
-            "\t-f\t: force re-zip\n"
-            "\t-g\t: skip interactive prompts\n"
-            "\t-lDIR\t: write log files in DIR (empty to disable)\n"
-            "\t-q\t: quiet mode\n"
-            "\t-s\t: prevent sub-directory recursion\n"
-            "\t-v\t: show version\n");
+            "\t-h\t\t: show this help\n"
+            "\t-d\t\t: strip sub-directories from zips\n"
+            "\t-f\t\t: force re-zip\n"
+            "\t-g\t\t: skip interactive prompts\n"
+            "\t-log\t\t: write errors to _error.log\n"
+            "\t-log=FILE\t: write errors to FILE\n"
+            "\t-q\t\t: quiet mode\n"
+            "\t-s\t\t: prevent sub-directory recursion\n"
+            "\t-v\t\t: show version\n");
         return EXIT_SUCCESS;
 
       case 'd':
         // Strip subdirs from zips
         qStripSubdirs = 1;
-        break;
-
-      case 'e':
-        // Error log file
-        errlog = &argv[iCount][2];
         break;
 
       case 'f':
@@ -989,11 +999,6 @@ int main(int argc, char **argv) {
       case 'g':
         // GUI launch process
         qGUILaunch = 1;
-        break;
-
-      case 'l':
-        // Log directory
-        logdir = &argv[iCount][2];
         break;
 
       case 'q':
@@ -1020,7 +1025,7 @@ int main(int argc, char **argv) {
   if (argc < 2 || iOptionsFound == (argc - 1)) {
     fprintf(stderr, "trrntzip: missing path\n");
     fprintf(stderr,
-            "Usage: trrntzip [-dfghqsv] [-eFILE] [-lDIR] [PATH/ZIP FILE]\n");
+            "Usage: trrntzip [-dfghqsv] [-log[=FILE]] [PATH/ZIP FILE]\n");
 #ifdef WIN32
     // Prevent the command window from disappearing immediately when
     // the user just clicks on the exe.
@@ -1038,38 +1043,11 @@ int main(int argc, char **argv) {
     return EXIT_CRITICAL;
   }
 
-  if (logdir) {
-    // Must be empty or end with DIRSEP. In case we have to add DIRSEP,
-    // strdup() with the leading option char and overprint.
-    size_t len = strlen(logdir);
-    int need_sep = len && logdir[len - 1] != DIRSEP;
-    ws->pszLogDir = strdup(logdir - need_sep);
-    if (need_sep && ws->pszLogDir)
-      sprintf(ws->pszLogDir, "%s%c", logdir, DIRSEP);
-  } else {
-#ifdef WIN32
-    // Must get trrntzip.exe path from argv[0].
-    // Under windows, if you drag a dir to the exe, it will use the
-    // user's "Documents and Settings" dir if we don't do this.
-    const char *ptr = strrchr(argv[0], DIRSEP);
-    if (ptr) {
-      ws->pszLogDir = malloc(ptr - argv[0] + 2);
-      if (ws->pszLogDir) {
-        memcpy(ws->pszLogDir, argv[0], ptr - argv[0] + 1);
-        ws->pszLogDir[ptr - argv[0] + 1] = 0;
-      }
-    } else {
-      // get_cwd() seems unnecessary, we could use relative paths instead.
-      ws->pszLogDir = get_cwd();
-    }
-#else
-    // We could use relative paths.
-    ws->pszLogDir = get_cwd();
-#endif
-  }
+  // Process logging is disabled.
+  ws->pszLogDir = strdup("");
 
   if (!ws->pszLogDir) {
-    fprintf(stderr, "Could not get log directory!\n");
+    fprintf(stderr, "Could not allocate log directory!\n");
     FreeWorkspace(ws);
     return EXIT_CRITICAL;
   }
@@ -1086,7 +1064,9 @@ int main(int argc, char **argv) {
 
   if (rc == TZ_OK) {
     // Start process for each passed path/zip file
-    for (iCount = iOptionsFound + 1; iCount < argc; iCount++) {
+    for (iCount = 1; iCount < argc; iCount++) {
+      if (argv[iCount][0] == '-')
+        continue;
       rc = RecursiveMigrateTop(argv[iCount], ws);
       if (rc == TZ_CRITICAL)
         break;
