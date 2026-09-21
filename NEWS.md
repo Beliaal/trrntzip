@@ -1,3 +1,7 @@
+# 1.3.2 [2026-09-21]
+
+* added ZSTD support [RVZSTD-xxxxxxxx]
+
 # 1.3.1 [2026-09-21]
 
 * Disabled log file output by default.

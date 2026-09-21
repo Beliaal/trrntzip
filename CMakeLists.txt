@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(trrntzip
-  VERSION 1.3.1
+  VERSION 1.3.2
   LANGUAGES C)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -9,6 +9,7 @@ include(Dist)
 Dist(${CMAKE_PROJECT_NAME}-${CMAKE_PROJECT_VERSION})
 
 find_package(ZLIB 1.2.2 REQUIRED)
+find_library(ZSTD_LIBRARY NAMES zstd REQUIRED)
 
 include(CheckSymbolExists)
 

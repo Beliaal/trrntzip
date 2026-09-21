@@ -967,11 +967,12 @@ int main(int argc, char **argv) {
       case 'h':
         fprintf(
             stdout, "%s",
-            "TorrentZip v" TZ_VERSION "\n\n"
+            "TorrentZip v" TZ_VERSION " | w/ZSTD support\n\n"
             "Copyright (C) 2005 - 2024 TorrentZip Team:\n"
             "\tStatMat, shindakun, Ultrasubmarine, r3nh03k, goosecreature, "
             "gordonj,\n\t0-wiz-0, A.Miller\n"
-            "Homepage: https://github.com/0-wiz-0/trrntzip\n\n"
+            "Homepage: https://github.com/0-wiz-0/trrntzip\n"
+            "Fork:     https://github.com/Beliaal/trrntzip\n\n"
             "Usage: trrntzip [-dfghqsv] [-log[=FILE]] [ZIPFILE|DIRECTORY]\n\n"
             "Convert a zip archive (or each zip archive in a directory) to torrentzip format.\n\n"
             "Options:\n"
