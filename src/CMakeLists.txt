@@ -1,7 +1,7 @@
 file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.c ${CMAKE_CURRENT_SOURCE_DIR}/minizip/*.c)
 add_executable(trrntzip ${SOURCES})
 target_compile_definitions(trrntzip PRIVATE "TZ_VERSION=\"${PROJECT_VERSION}\"")
-target_link_libraries(trrntzip ZLIB::ZLIB)
+target_link_libraries(trrntzip ZLIB::ZLIB ${ZSTD_LIBRARY})
 if (UNIX)
   target_link_libraries(trrntzip m)
 endif()

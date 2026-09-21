@@ -73,7 +73,10 @@
 #endif
 
 #include "zlib.h"
+#include <zstd.h>
 #include "unzip.h"
+
+#define ZIP_METHOD_ZSTD 93
 
 #ifdef STDC
 #  include <stddef.h>
@@ -130,6 +133,7 @@ typedef struct
 {
     char  *read_buffer;         /* internal buffer for compressed data */
     z_stream stream;            /* zLib stream structure for inflate */
+    ZSTD_DCtx *zstd_dctx;       /* Zstd decompression context */
 
 #ifdef HAVE_BZIP2
     bz_stream bstream;          /* bzLib stream structure for bziped */
@@ -1297,7 +1301,8 @@ local int unz64local_CheckCurrentFileCoherencyHeader(unz64_s* s, uInt* piSizeVar
 /* #ifdef HAVE_BZIP2 */
                          (s->cur_file_info.compression_method!=Z_BZIP2ED) &&
 /* #endif */
-                         (s->cur_file_info.compression_method!=Z_DEFLATED))
+                         (s->cur_file_info.compression_method!=Z_DEFLATED) &&
+                         (s->cur_file_info.compression_method!=ZIP_METHOD_ZSTD))
         err=UNZ_BADZIPFILE;
 
     if (unz64local_getLong(&s->z_filefunc, s->filestream,&uData) != UNZ_OK) /* date/time */
@@ -1384,6 +1389,7 @@ extern int ZEXPORT unzOpenCurrentFile3(unzFile file, int* method,
     }
 
     pfile_in_zip_read_info->stream_initialised=0;
+    pfile_in_zip_read_info->zstd_dctx = NULL;
 
     if (method!=NULL)
         *method = (int)s->cur_file_info.compression_method;
@@ -1403,7 +1409,8 @@ extern int ZEXPORT unzOpenCurrentFile3(unzFile file, int* method,
 /* #ifdef HAVE_BZIP2 */
         (s->cur_file_info.compression_method!=Z_BZIP2ED) &&
 /* #endif */
-        (s->cur_file_info.compression_method!=Z_DEFLATED))
+        (s->cur_file_info.compression_method!=Z_DEFLATED) &&
+        (s->cur_file_info.compression_method!=ZIP_METHOD_ZSTD))
 
         err=UNZ_BADZIPFILE;
 
@@ -1467,6 +1474,26 @@ extern int ZEXPORT unzOpenCurrentFile3(unzFile file, int* method,
          * return Z_STREAM_END.
          * In unzip, i don't wait absolutely Z_STREAM_END because I known the
          * size of both compressed and uncompressed data
+         */
+    }
+    else if ((s->cur_file_info.compression_method==ZIP_METHOD_ZSTD) && (!raw))
+    {
+      pfile_in_zip_read_info->zstd_dctx = ZSTD_createDCtx();
+
+      if (pfile_in_zip_read_info->zstd_dctx == NULL)
+      {
+        free(pfile_in_zip_read_info->read_buffer);
+        free(pfile_in_zip_read_info);
+        return UNZ_INTERNALERROR;
+      }
+
+      pfile_in_zip_read_info->stream.next_in = NULL;
+      pfile_in_zip_read_info->stream.avail_in = 0;
+      pfile_in_zip_read_info->stream_initialised = ZIP_METHOD_ZSTD;
+
+        /* Zstandard streams are self-describing, so no special raw-stream
+         * initialization is required here. The decompression context is
+         * created once and fed incrementally by unzReadCurrentFile().
          */
     }
     pfile_in_zip_read_info->rest_read_compressed =
@@ -1702,6 +1729,55 @@ extern int ZEXPORT unzReadCurrentFile(unzFile file, voidp buf, unsigned len) {
               break;
 #endif
         } // end Z_BZIP2ED
+        else if (pfile_in_zip_read_info->compression_method == ZIP_METHOD_ZSTD)
+        {
+            ZSTD_inBuffer input;
+            ZSTD_outBuffer output;
+            size_t zret;
+            size_t produced;
+
+            input.src = pfile_in_zip_read_info->stream.next_in;
+            input.size = pfile_in_zip_read_info->stream.avail_in;
+            input.pos = 0;
+
+            output.dst = pfile_in_zip_read_info->stream.next_out;
+            output.size = pfile_in_zip_read_info->stream.avail_out;
+            output.pos = 0;
+
+            zret = ZSTD_decompressStream(
+              pfile_in_zip_read_info->zstd_dctx,
+              &output,
+              &input
+            );
+
+            if (ZSTD_isError(zret))
+            return UNZ_BADZIPFILE;
+
+            produced = output.pos;
+
+            pfile_in_zip_read_info->stream.next_in += input.pos;
+            pfile_in_zip_read_info->stream.avail_in -= (uInt)input.pos;
+
+            pfile_in_zip_read_info->stream.next_out += output.pos;
+            pfile_in_zip_read_info->stream.avail_out -= (uInt)output.pos;
+
+            pfile_in_zip_read_info->stream.total_in += (uLong)input.pos;
+            pfile_in_zip_read_info->stream.total_out += (uLong)output.pos;
+
+            pfile_in_zip_read_info->total_out_64 += produced;
+
+            pfile_in_zip_read_info->crc32 =
+              crc32(pfile_in_zip_read_info->crc32,
+              (const Bytef *)output.dst,
+              (uInt)produced);
+
+            pfile_in_zip_read_info->rest_read_uncompressed -= produced;
+
+            iRead += (uInt)produced;
+
+            if (zret == 0)
+            return (iRead == 0) ? UNZ_EOF : (int)iRead;
+        } // end ZIP_METHOD_ZSTD		
         else
         {
             ZPOS64_T uTotalOutBefore,uTotalOutAfter;
@@ -1897,6 +1973,11 @@ extern int ZEXPORT unzCloseCurrentFile(unzFile file) {
     else if (pfile_in_zip_read_info->stream_initialised == Z_BZIP2ED)
         BZ2_bzDecompressEnd(&pfile_in_zip_read_info->bstream);
 #endif
+    else if (pfile_in_zip_read_info->stream_initialised == ZIP_METHOD_ZSTD)
+    {
+      ZSTD_freeDCtx(pfile_in_zip_read_info->zstd_dctx);
+      pfile_in_zip_read_info->zstd_dctx = NULL;
+    }
 
 
     pfile_in_zip_read_info->stream_initialised = 0;

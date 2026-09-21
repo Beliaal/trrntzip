@@ -18,6 +18,7 @@ comes from).
 
 * A C compiler (e.g. gcc or clang)
 * [zlib](http://zlib.net/) (at least version 1.2.2)
+* [zstd](https://facebook.github.io/zstd/) (libzstd-dev)
 * [CMake](https://cmake.org/) (at least version 3.12)
 
 ## Building
@@ -27,6 +28,43 @@ comes from).
 * cmake ..
 * make
 * make install
+
+## Building static
+
+Make sure the static versions of zlib and zstd are installed. On Debian/Ubuntu, for example:
+
+```bash
+sudo apt install zlib1g-dev libzstd-dev
+```
+
+To locate the static libraries:
+
+```bash
+find /usr /usr/local -type f \( -name 'libz.a' -o -name 'libzstd.a' \) 2>/dev/null
+```
+
+On a typical x86-64 Debian/Ubuntu system they are located at:
+
+```text
+/usr/lib/x86_64-linux-gnu/libz.a
+/usr/lib/x86_64-linux-gnu/libzstd.a
+```
+
+Then build with:
+
+```bash
+mkdir build
+cd build
+
+cmake .. \
+    -DZLIB_LIBRARY=/usr/lib/x86_64-linux-gnu/libz.a \
+    -DZLIB_INCLUDE_DIR=/usr/include \
+    -DZSTD_LIBRARY=/usr/lib/x86_64-linux-gnu/libzstd.a \
+    -DCMAKE_EXE_LINKER_FLAGS="-static"
+
+make
+make install
+```
 
 # Packages
 
