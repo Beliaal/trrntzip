@@ -1,3 +1,9 @@
+# 1.3.1 [2026-09-21]
+
+* Disabled log file output by default.
+* Added `-log` to enable logging with the default filename `_error.log`.
+* Added `-log=FILE` to write the log to a user-specified file.
+
 # Unreleased
 
 * fix build on Windows with MSVC

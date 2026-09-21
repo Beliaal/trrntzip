@@ -175,23 +175,9 @@ int SetupErrorLog(WORKSPACE *ws, char qGUILaunch) {
   struct stat istat;
   int rc;
 
-  if (!ws->pszErrorLogFile) {
-    static const char szErrorLogName[] = "error.log";
-    static const char sep[2] = {DIRSEP, 0};
-    size_t dir_len = strlen(ws->pszLogDir);
-    int has_sep = !dir_len || ws->pszLogDir[dir_len - 1] == DIRSEP;
-    size_t sz = dir_len + 1 - has_sep + sizeof(szErrorLogName);
-
-    if (!dir_len) // logging disabled
-      return TZ_OK;
-
-    if (!(ws->pszErrorLogFile = malloc(sz))) {
-      fprintf(stderr, "Error allocating memory!\n");
-      return TZ_CRITICAL;
-    }
-    snprintf(ws->pszErrorLogFile, sz, "%s%s%s", ws->pszLogDir, sep + has_sep,
-             szErrorLogName);
-  }
+  // Error logging is disabled unless explicitly enabled with -log.
+  if (!ws->pszErrorLogFile || !*ws->pszErrorLogFile)
+    return TZ_OK;
 
   rc = stat(ws->pszErrorLogFile, &istat);
 
